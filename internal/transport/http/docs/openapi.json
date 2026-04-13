@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Task Service API",
-    "version": "1.0.0",
-    "description": "CRUD API for tasks built with clean architecture."
+    "version": "1.1.0",
+    "description": "CRUD API for tasks with support for recurring task templates and generated task instances."
   },
   "servers": [
     {
@@ -21,6 +21,7 @@
       "get": {
         "tags": ["Tasks"],
         "summary": "List tasks",
+        "description": "Returns one-time tasks, recurring templates and generated recurring instances.",
         "responses": {
           "200": {
             "description": "Task list",
@@ -38,6 +39,7 @@
       "post": {
         "tags": ["Tasks"],
         "summary": "Create task",
+        "description": "If `recurrence` is provided, `scheduled_at` becomes required and the created entity is stored as a recurring template.",
         "requestBody": {
           "required": true,
           "content": {
@@ -86,6 +88,7 @@
       "put": {
         "tags": ["Tasks"],
         "summary": "Update task",
+        "description": "Updating a recurring template requires sending `recurrence` and `scheduled_at` again. Generated recurring instances cannot redefine recurrence settings.",
         "parameters": [
           {
             "name": "id",
@@ -118,6 +121,7 @@
       "delete": {
         "tags": ["Tasks"],
         "summary": "Delete task",
+        "description": "Deleting a recurring template also removes its generated instances.",
         "parameters": [
           {
             "name": "id",
@@ -159,16 +163,25 @@
         "properties": {
           "title": {
             "type": "string",
-            "example": "Prepare release"
+            "example": "Call patients for follow-up"
           },
           "description": {
             "type": "string",
-            "example": "Collect release notes and check migrations"
+            "example": "Use the morning call script and update notes after every call"
           },
           "status": {
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "scheduled_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Anchor timestamp for a one-time task or for recurrence calculation.",
+            "example": "2026-04-13T09:00:00Z"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
           }
         }
       },
@@ -178,16 +191,63 @@
         "properties": {
           "title": {
             "type": "string",
-            "example": "Prepare release"
+            "example": "Call patients for follow-up"
           },
           "description": {
             "type": "string",
-            "example": "Collect release notes and check migrations"
+            "example": "Use the morning call script and update notes after every call"
           },
           "status": {
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "scheduled_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-13T09:00:00Z"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
+          }
+        }
+      },
+      "Recurrence": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["every_n_days", "monthly_by_day", "specific_dates", "day_parity"],
+            "example": "every_n_days"
+          },
+          "every_n_days": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 2,
+            "description": "Used for `every_n_days`."
+          },
+          "day_of_month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "example": 15,
+            "description": "Used for `monthly_by_day`."
+          },
+          "specific_dates": {
+            "type": "array",
+            "description": "Used for `specific_dates`. Dates are interpreted in UTC.",
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": ["2026-04-15", "2026-04-20", "2026-05-01"]
+          },
+          "day_parity": {
+            "type": "string",
+            "enum": ["odd", "even"],
+            "example": "even",
+            "description": "Used for `day_parity`."
           }
         }
       },
@@ -195,32 +255,55 @@
         "type": "object",
         "properties": {
           "id": { "type": "integer", "format": "int64", "example": 1 },
-          "title": { "type": "string", "example": "Prepare release" },
+          "title": { "type": "string", "example": "Call patients for follow-up" },
           "description": {
             "type": "string",
-            "example": "Collect release notes and check migrations"
+            "example": "Use the morning call script and update notes after every call"
           },
           "status": {
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
           },
+          "kind": {
+            "type": "string",
+            "enum": ["one_time", "recurring_template", "recurring_occurrence"],
+            "example": "recurring_template"
+          },
+          "template_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "example": 10
+          },
+          "scheduled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-04-13T09:00:00Z"
+          },
+          "recurrence": {
+            "allOf": [
+              { "$ref": "#/components/schemas/Recurrence" }
+            ],
+            "nullable": true
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "example": "2026-03-24T00:00:00Z"
+            "example": "2026-04-13T08:30:00Z"
           },
           "updated_at": {
             "type": "string",
             "format": "date-time",
-            "example": "2026-03-24T00:00:00Z"
+            "example": "2026-04-13T08:45:00Z"
           }
         }
       },
       "Error": {
         "type": "object",
         "properties": {
-          "error": { "type": "string", "example": "task not found" }
+          "error": { "type": "string", "example": "invalid task input: scheduled_at is required when recurrence is provided" }
         }
       }
     }
